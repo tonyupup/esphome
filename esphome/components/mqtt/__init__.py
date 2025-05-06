@@ -373,32 +373,47 @@ async def to_code(config):
             )
         )
 
-    cg.add(var.set_topic_prefix(config[CONF_TOPIC_PREFIX], CORE.name))
+    use_mac_uniq_id = discovery_unique_id_generator == "mac"
+    change_topic = False
+    if config[CONF_TOPIC_PREFIX] == CORE.name and use_mac_uniq_id:
+        cg.add(var.set_topic_prefix(cg.MockObj("App").get_name()))
+        change_topic = True
+    else:
+        cg.add(var.set_topic_prefix(config[CONF_TOPIC_PREFIX]))
 
     if config[CONF_USE_ABBREVIATIONS]:
         cg.add_define("USE_MQTT_ABBREVIATIONS")
+
+    def prepare_topic(config):
+        if change_topic and config.get(CONF_TOPIC) != "":
+            config[CONF_TOPIC] = cg.MockObj("App").get_name() + config.get(
+                CONF_TOPIC
+            ).lstrip(CORE.name)
+        return config
 
     birth_message = config[CONF_BIRTH_MESSAGE]
     if not birth_message:
         cg.add(var.disable_birth_message())
     else:
-        cg.add(var.set_birth_message(exp_mqtt_message(birth_message)))
+        cg.add(var.set_birth_message(exp_mqtt_message(prepare_topic(birth_message))))
     will_message = config[CONF_WILL_MESSAGE]
     if not will_message:
         cg.add(var.disable_last_will())
     else:
-        cg.add(var.set_last_will(exp_mqtt_message(will_message)))
+        cg.add(var.set_last_will(exp_mqtt_message(prepare_topic(will_message))))
     shutdown_message = config[CONF_SHUTDOWN_MESSAGE]
     if not shutdown_message:
         cg.add(var.disable_shutdown_message())
     else:
-        cg.add(var.set_shutdown_message(exp_mqtt_message(shutdown_message)))
+        cg.add(
+            var.set_shutdown_message(exp_mqtt_message(prepare_topic(shutdown_message)))
+        )
 
     log_topic = config[CONF_LOG_TOPIC]
     if not log_topic:
         cg.add(var.disable_log_message())
     else:
-        cg.add(var.set_log_message_template(exp_mqtt_message(log_topic)))
+        cg.add(var.set_log_message_template(exp_mqtt_message(prepare_topic(log_topic))))
 
         if CONF_LEVEL in log_topic:
             cg.add(var.set_log_level(logger.LOG_LEVELS[log_topic[CONF_LEVEL]]))
